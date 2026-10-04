@@ -8,6 +8,26 @@ def test_unauthenticated_is_rejected(client):
     assert res.status_code == 401
 
 
+def test_login_accepts_oauth2_form_and_json(client):
+    form_login = client.post(
+        "/api/auth/token",
+        data={"username": "ops1@example.com", "password": "ops123"},
+    )
+    assert form_login.status_code == 200
+    assert form_login.json()["token_type"] == "bearer"
+    assert client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {form_login.json()['access_token']}"},
+    ).status_code == 200
+
+    json_login = client.post(
+        "/api/auth/login",
+        json={"email": "ops1@example.com", "password": "ops123"},
+    )
+    assert json_login.status_code == 200
+    assert json_login.json()["token_type"] == "bearer"
+
+
 def test_client_cannot_see_other_client_requests(client):
     a = login(client, "client-a@example.com", "client123")
     b = login(client, "client-b@example.com", "client123")

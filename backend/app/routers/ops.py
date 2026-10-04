@@ -14,7 +14,7 @@ from app.security import decode_access_token
 from app.services.events import subscribe
 
 router = APIRouter(tags=["ops"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
 @router.get("/health")
