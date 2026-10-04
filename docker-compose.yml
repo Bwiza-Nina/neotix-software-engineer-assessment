@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: desk
+      POSTGRES_PASSWORD: desk
+      POSTGRES_DB: desk
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U desk -d desk"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://desk:desk@db:5432/desk
+      SECRET_KEY: ${SECRET_KEY:-dev-only-change-me}
+      SEED_USERS_PATH: /seed/users.json
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    volumes:
+      - ./seed:/seed:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
