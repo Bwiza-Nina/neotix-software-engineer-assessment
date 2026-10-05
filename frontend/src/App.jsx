@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, clearToken, getToken, setToken } from "./api.js";
 
+const label = (s) => (s || "").replace(/_/g, " ");
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
@@ -21,47 +23,92 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="page muted">Loading…</div>;
+  if (loading) return <div className="page center muted">Loading…</div>;
   if (!user) return <Login onLogin={setUser} error={error} setError={setError} />;
   return <Desk user={user} onLogout={() => { clearToken(); setUser(null); }} />;
 }
 
+function Logo() {
+  return (
+    <span className="mark" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19V9l8-5 8 5v10" />
+        <path d="M9 19v-5h6v5" />
+      </svg>
+    </span>
+  );
+}
+
 function Login({ onLogin, error, setError }) {
-  const [email, setEmail] = useState("client-a@example.com");
-  const [password, setPassword] = useState("client123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setError("");
+    setBusy(true);
     try {
       const tok = await api.login(email, password);
       setToken(tok.access_token);
       onLogin(await api.me());
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
-    <div className="page">
-      <div className="card login">
-        <h1>Dataset Request Desk</h1>
-        <p className="muted">Internal platform for robotics dataset fulfilment.</p>
-        <form onSubmit={submit}>
-          <label>
-            Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-          </label>
-          <label>
-            Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button type="submit">Sign in</button>
-        </form>
-        <p className="muted small">
-          Seed accounts: client-a@example.com / client123 · ops1@example.com / ops123 · admin@example.com / admin123
-        </p>
+    <div className="page center">
+      <div className="auth">
+        <aside className="auth-art">
+          <div className="brand">
+            <Logo />
+            <strong>Dataset Request Desk</strong>
+          </div>
+          <div>
+            <h2>Robot data, delivered on time.</h2>
+            <p>Request episodes, track fulfilment, and review deliveries in one place.</p>
+            <svg viewBox="0 0 360 120" fill="none" aria-hidden="true">
+              <path className="trace" d="M10 100 C60 100 60 30 120 30 S190 90 240 60 S320 20 350 30" stroke="#2fc4b2" strokeWidth="3" strokeLinecap="round" />
+              {[[10, 100], [120, 30], [240, 60], [350, 30]].map(([x, y]) => (
+                <circle key={x} cx={x} cy={y} r="5" fill="#0d1b2a" stroke="#2fc4b2" strokeWidth="2.5" />
+              ))}
+            </svg>
+          </div>
+        </aside>
+
+        <div className="auth-form">
+          <h1>Sign in</h1>
+          <p className="muted">Use the account your team set up for you.</p>
+          <form className="login-form" onSubmit={submit}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            {error && <p className="error" role="alert">{error}</p>}
+            <button type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -73,16 +120,21 @@ function Desk({ user, onLogout }) {
   return (
     <div className="page">
       <header className="top">
-        <div>
+        <div className="brand">
+          <Logo />
           <strong>Dataset Request Desk</strong>
-          <div className="muted small">
-            {user.name} · {user.role}
-            {user.organisation ? ` · ${user.organisation}` : ""}
-          </div>
         </div>
-        <button className="ghost" onClick={onLogout}>
-          Sign out
-        </button>
+        <div className="who">
+          <div className="avatar" aria-hidden="true">{(user.name || "?").charAt(0).toUpperCase()}</div>
+          <div>
+            <div className="name">{user.name}</div>
+            <div className="meta">
+              {user.role}
+              {user.organisation ? ` at ${user.organisation}` : ""}
+            </div>
+          </div>
+          <button className="ghost" onClick={onLogout}>Sign out</button>
+        </div>
       </header>
       {isClient && <ClientHome />}
       {isOps && <OperatorHome isAdmin={user.role === "admin"} />}
@@ -136,6 +188,7 @@ function ClientHome() {
     <div className="grid">
       <form className="card" onSubmit={create}>
         <h2>New dataset request</h2>
+        <p className="muted small">Tell us the task and how many episodes you need.</p>
         <label>
           Task
           <input value={form.task_name} onChange={(e) => setForm({ ...form, task_name: e.target.value })} />
@@ -155,7 +208,11 @@ function ClientHome() {
         </label>
         <label>
           Notes
-          <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <textarea
+            placeholder="Anything the operators should know"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
         </label>
         <button type="submit">Submit request</button>
       </form>
@@ -164,6 +221,7 @@ function ClientHome() {
         {error && <p className="error">{error}</p>}
         <RequestTable
           rows={requests}
+          emptyText="No requests yet. Submit your first one using the form."
           actions={(row) =>
             row.status === "delivered" ? (
               <>
@@ -308,26 +366,34 @@ function OperatorHome({ isAdmin }) {
         <RequestTable
           rows={requests}
           showClient
+          emptyText="No requests have been submitted yet."
           onRow={(row) => setSelected(row)}
           selectedId={selected?.id}
         />
       </section>
 
       <section className="card">
-        <h2>{selected ? `Request #${selected.id}` : "Select a request"}</h2>
+        <h2>{selected ? `Request #${selected.id}` : "Request details"}</h2>
+        {!selected && <p className="empty">Select a request to assign episodes and update its status.</p>}
         {selected && (
           <>
-            <p>
-              {selected.task_name} · {selected.assigned_count}/{selected.episodes_requested} assigned · {selected.status}
-            </p>
+            <div className="facts">
+              <span className="status">{selected.task_name}</span>
+              <span className="status">{selected.assigned_count}/{selected.episodes_requested} assigned</span>
+              <span className={`status ${selected.status}`}>{label(selected.status)}</span>
+            </div>
             {nextOpsStatus && (
-              <button onClick={() => changeStatus(selected.id, nextOpsStatus)}>Move to {nextOpsStatus}</button>
+              <button onClick={() => changeStatus(selected.id, nextOpsStatus)}>Move to {label(nextOpsStatus)}</button>
             )}
             <h3>Assigned episodes</h3>
+            {selected.assignments.length === 0 && <p className="muted small">No episodes assigned yet.</p>}
             <ul className="plain">
               {selected.assignments.map((a) => (
                 <li key={a.id}>
-                  {a.episode.episode_id} · {a.episode.quality} · {a.episode.robot_id}
+                  <span>
+                    <span className="mono">{a.episode.episode_id}</span>{" "}
+                    <span className="muted small">{a.episode.quality} · {a.episode.robot_id}</span>
+                  </span>
                   <button className="ghost" onClick={() => unassign(a.episode.episode_id)}>
                     Unassign
                   </button>
@@ -349,15 +415,15 @@ function OperatorHome({ isAdmin }) {
         {importMsg && <p className="muted">{importMsg}</p>}
         <div className="filters">
           <input
-            placeholder="Filter task_name"
+            placeholder="Filter by task name"
             value={filters.task_name}
             onChange={(e) => setFilters({ ...filters, task_name: e.target.value })}
           />
           <select value={filters.quality} onChange={(e) => setFilters({ ...filters, quality: e.target.value })}>
-            <option value="">any quality</option>
-            <option value="good">good</option>
-            <option value="usable">usable</option>
-            <option value="bad">bad</option>
+            <option value="">Any quality</option>
+            <option value="good">Good</option>
+            <option value="usable">Usable</option>
+            <option value="bad">Bad</option>
           </select>
           <label className="inline">
             <input
@@ -365,7 +431,7 @@ function OperatorHome({ isAdmin }) {
               checked={filters.unassigned_only}
               onChange={(e) => setFilters({ ...filters, unassigned_only: e.target.checked })}
             />
-            unassigned only
+            &nbsp;Unassigned only
           </label>
         </div>
         <table>
@@ -379,9 +445,14 @@ function OperatorHome({ isAdmin }) {
             </tr>
           </thead>
           <tbody>
+            {episodes.length === 0 && (
+              <tr>
+                <td colSpan="5" className="empty">No episodes match these filters.</td>
+              </tr>
+            )}
             {episodes.map((ep) => (
               <tr key={ep.id}>
-                <td>{ep.episode_id}</td>
+                <td className="id">{ep.episode_id}</td>
                 <td>{ep.task_name}</td>
                 <td>{ep.robot_id}</td>
                 <td>{ep.quality}</td>
@@ -422,7 +493,7 @@ function AdminUsers() {
 
   return (
     <section className="card span-2">
-      <h2>Users (admin)</h2>
+      <h2>Users</h2>
       {error && <p className="error">{error}</p>}
       <table>
         <thead>
@@ -438,7 +509,11 @@ function AdminUsers() {
             <tr key={u.id}>
               <td>{u.email}</td>
               <td>{u.role}</td>
-              <td>{u.is_active ? "yes" : "no"}</td>
+              <td>
+                <span className={`status ${u.is_active ? "accepted" : "rejected"}`}>
+                  {u.is_active ? "Active" : "Inactive"}
+                </span>
+              </td>
               <td>
                 <button className="ghost" onClick={() => toggle(u)}>
                   {u.is_active ? "Deactivate" : "Reactivate"}
@@ -452,7 +527,7 @@ function AdminUsers() {
   );
 }
 
-function RequestTable({ rows, actions, showClient, onRow, selectedId }) {
+function RequestTable({ rows, actions, showClient, onRow, selectedId, emptyText }) {
   return (
     <table>
       <thead>
@@ -467,25 +542,40 @@ function RequestTable({ rows, actions, showClient, onRow, selectedId }) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr
-            key={row.id}
-            className={selectedId === row.id ? "selected" : onRow ? "clickable" : ""}
-            onClick={() => onRow && onRow(row)}
-          >
-            <td>{row.id}</td>
-            {showClient && <td>{row.client_name}</td>}
-            <td>{row.task_name}</td>
-            <td>
-              {row.assigned_count}/{row.episodes_requested}
+        {rows.length === 0 && (
+          <tr>
+            <td colSpan={5 + (showClient ? 1 : 0) + (actions ? 1 : 0)} className="empty">
+              {emptyText || "Nothing here yet."}
             </td>
-            <td>{row.deadline}</td>
-            <td>
-              <span className={`status ${row.status}`}>{row.status}</span>
-            </td>
-            {actions && <td onClick={(e) => e.stopPropagation()}>{actions(row)}</td>}
           </tr>
-        ))}
+        )}
+        {rows.map((row) => {
+          const pct = row.episodes_requested
+            ? Math.min(100, Math.round((row.assigned_count / row.episodes_requested) * 100))
+            : 0;
+          return (
+            <tr
+              key={row.id}
+              className={selectedId === row.id ? "selected" : onRow ? "clickable" : ""}
+              onClick={() => onRow && onRow(row)}
+            >
+              <td className="id">{row.id}</td>
+              {showClient && <td>{row.client_name}</td>}
+              <td>{row.task_name}</td>
+              <td>
+                <span className="fill">
+                  <span className="bar"><i style={{ width: `${pct}%` }} /></span>
+                  {row.assigned_count}/{row.episodes_requested}
+                </span>
+              </td>
+              <td>{row.deadline}</td>
+              <td>
+                <span className={`status ${row.status}`}>{label(row.status)}</span>
+              </td>
+              {actions && <td onClick={(e) => e.stopPropagation()}>{actions(row)}</td>}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
